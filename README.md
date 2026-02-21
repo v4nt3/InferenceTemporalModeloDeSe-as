@@ -10,13 +10,13 @@ Este repositorio contiene el sistema de reconocimiento de Lengua de Señas basad
 project/
 │
 ├── transformer/
-│   ├── training/
+│   ├── data_/
 │   ├── evaluation/
 │   │   ├── inference.py
 │   │   └── README.md
-│   └── models/
+│   └── model/
 │
-└── checkpoints/
+└── outputs/
 ```
 
 ---
