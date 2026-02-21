@@ -1,0 +1,8 @@
+__pycache__/
+*.log
+*.pt
+*.env
+.env.*
+env/
+.vscode/
+*.code-workspace
