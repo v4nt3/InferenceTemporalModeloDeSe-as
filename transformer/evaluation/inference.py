@@ -162,6 +162,8 @@ class SignLanguageInference:
         if config_path:
             from transformer.core.config import Config
             self.config = Config.from_yaml(config_path)
+        else:
+            self.config = self._load_config_from_checkpoint(checkpoint_path)
 
         self.model = self._load_model(checkpoint_path)
         self.model.eval()
@@ -179,7 +181,17 @@ class SignLanguageInference:
             f"max_seq_length={self.max_seq_length}"
         )
     
+    def _load_config_from_checkpoint(self, checkpoint_path: str):
+        from transformer.core.config import Config, get_pose_only_config
+        
+        checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+        if "config" in checkpoint:
+            return Config.from_dict(checkpoint["config"])
+        
+        logger.warning("No config in checkpointg")
+        return get_pose_only_config()
     
+
     def _load_model(self, checkpoint_path: str):
         from transformer.model.transformer import create_model
         
