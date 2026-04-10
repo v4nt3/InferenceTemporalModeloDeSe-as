@@ -22,21 +22,11 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class SignPrediction:
-    """Single sign prediction."""
     label: str
     confidence: float
     top_k: List[Tuple[str, float]] = field(default_factory=list)
     start_frame: int = 0
     end_frame: int = 0
-
-
-@dataclass  
-class SentencePrediction:
-    """Sentence prediction."""
-    signs: List[SignPrediction] = field(default_factory=list)
-    sentence: str = ""
-    total_frames: int = 0
-    processing_time: float = 0.0
 
 
 class PoseExtractorLive:
@@ -60,7 +50,6 @@ class PoseExtractorLive:
         self._prev_keypoints = None
     
     def reset(self):
-        """Reset state for new video/sequence."""
         self._prev_keypoints = None
     
     def extract_frame(self, frame_rgb: np.ndarray) -> np.ndarray:
@@ -191,7 +180,6 @@ class SignLanguageInference:
         logger.warning("No config in checkpointg")
         return get_pose_only_config()
     
-
     def _load_model(self, checkpoint_path: str):
         from transformer.model.transformer import create_model
         
@@ -240,9 +228,7 @@ class SignLanguageInference:
         return model.to(self.device)
     
     def _load_labels(self, labels_path: str) -> dict:
-            """
-            Carga las etiquetas manejando diferentes formatos de JSON.
-            """
+ 
             with open(labels_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 
@@ -280,7 +266,6 @@ class SignLanguageInference:
         
         return pose_tensor, mask_tensor
     
-
     def _predict_window(
         self,
         features: np.ndarray
@@ -375,73 +360,7 @@ class SignLanguageInference:
 
         detection_ratio = np.mean(valid_frames)
 
-        return detection_ratio >= min_detection_ratio
-    
-    def predict_sentence(self, video_path: str) -> SentencePrediction:
-
-        start_time = time.time()
-        
-        features = self.pose_extractor.extract_video(video_path)
-        original_total_frames = len(features)
-
-        first_idx = self._first_valid_hand_frame(features)
-
-        if first_idx is not None:
-            features = features[first_idx:]
-            logger.info(f"First frame with hands: {first_idx}")
-        else:
-            first_idx = 0
-
-        total_frames = len(features)
-        
-        window_size = self.inf_config.window_size
-        stride = self.inf_config.window_stride
-        min_confidence = self.inf_config.min_confidence
-        
-        raw_predictions = []
-        
-        for start in range(0, total_frames, stride):
-            end = min(start + window_size, total_frames)
-            window_features = features[start:end]
-            
-            if len(window_features) < self.config.data.min_seq_length:
-                continue
-            
-            if not self._window_has_valid_hands(window_features):
-                continue
-            
-            prediction = self._predict_window(window_features)
-            
-            prediction.start_frame = start + first_idx
-            prediction.end_frame = end + first_idx
-            
-            if prediction.confidence >= min_confidence:
-                raw_predictions.append(prediction)
-        
-        
-        if self.inf_config.merge_duplicates:
-            merged = self._merge_predictions(raw_predictions)
-        else:
-            merged = raw_predictions
-        
-        sentence = " ".join([p.label for p in merged])
-        
-        elapsed = time.time() - start_time
-        
-        result = SentencePrediction(
-            signs=merged,
-            sentence=sentence,
-            total_frames=original_total_frames,
-            processing_time=elapsed
-        )
-        
-        logger.info(
-            f"Sentence prediction: '{sentence}' "
-            f"({len(merged)} signs, {original_total_frames} frames, {elapsed:.2f}s)"
-        )
-        
-        return result
-
+        return detection_ratio >= min_detection_ratio  
  
     def _merge_predictions(
         self, predictions: List[SignPrediction]
@@ -566,30 +485,14 @@ class SignLanguageInference:
     def close(self):
         self.pose_extractor.close()
 
-
-
 def predict_sign(
     video_path: str,
     checkpoint_path: str,
     config_path: str = None,
     labels_path: str = None
 ) -> SignPrediction:
-    """Quick function to predict a single sign sign."""
     engine = SignLanguageInference(checkpoint_path, config_path, labels_path)
     result = engine.predict_sign(video_path)
-    engine.close()
-    return result
-
-
-def predict_sentence(
-    video_path: str,
-    checkpoint_path: str,
-    config_path: str = None,
-    labels_path: str = None
-) -> SentencePrediction:
-    """Quick function to predict a sentence."""
-    engine = SignLanguageInference(checkpoint_path, config_path, labels_path)
-    result = engine.predict_sentence(video_path)
     engine.close()
     return result
 
@@ -598,7 +501,7 @@ if __name__ == "__main__":
     import argparse
     
     parser = argparse.ArgumentParser(description="Sign Language Inference")
-    parser.add_argument("--mode", choices=["sign", "sentence", "camera"], required=True)
+    parser.add_argument("--mode", choices=["sign", "camera"], required=True)
     parser.add_argument("--video", type=str, help="Path to video file")
     parser.add_argument("--checkpoint", type=str, required=True)
     parser.add_argument("--config", type=str, default=None)
@@ -624,16 +527,6 @@ if __name__ == "__main__":
         print(f"Top-{len(result.top_k)}:")
         for label, conf in result.top_k:
             print(f"  {label}: {conf:.1%}")
-    
-    elif args.mode == "sentence":
-        if not args.video:
-            parser.error("--video")
-        result = engine.predict_sentence(args.video)
-        print(f"\nSentence: {result.sentence}")
-        print(f"Signs detected: {len(result.signs)}")
-        for i, sign in enumerate(result.signs):
-            print(f"  [{sign.start_frame}-{sign.end_frame}] "
-                  f"{sign.label} ({sign.confidence:.1%})")
     
     elif args.mode == "camera":
         print("Starting camera Press 'q' to quit")
